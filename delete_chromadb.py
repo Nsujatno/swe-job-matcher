@@ -12,7 +12,7 @@ collection = client.get_collection(name="resumes")
 # print(f"Deleted document ID(s): {doc_id}")
 
 ## delete all chunks from resume
-resume_id = "043bd98e-3bb0-42c6-9434-c4fd011c4f5c"  # e.g., 'a1b2c3...'
+resume_id = "37ab3f76-d439-4c2b-bc33-7c4a33f754d2"  # e.g., 'a1b2c3...'
 # Retrieve all IDs linked to that resume_id
 results = collection.get(where={"resume_id": resume_id})
 ids_to_delete = results["ids"]

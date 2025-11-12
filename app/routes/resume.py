@@ -3,63 +3,63 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from openai import OpenAI
 from app.config import settings, chroma_client
-from app.models import Resume, UserPreferences
+from app.models import ResumeUploadRequest
 
 router = APIRouter()
 client = OpenAI(api_key=settings.openai_api_key)
 
 @router.post("/resume")
-async def upload_resume(resume: Resume, preferences: UserPreferences):
+async def upload_resume(request: ResumeUploadRequest):
     resume_id = str(uuid.uuid4())
 
     chunks = []
     chunk_metadata = []
     chunk_ids = []
 
-    chunks.append(resume.text)
+    chunks.append(request.resume.text)
     chunk_metadata.append({
         "resume_id": resume_id,
         "chunk_type": "full_text",
-        "roles": ",".join(preferences.role),
-        "experience_level": preferences.experience_level
+        "roles": ",".join(request.preferences.role),
+        "experience_level": request.preferences.experience_level
     })
     chunk_ids.append(f"{resume_id}_full")
 
     # sills as separate chunk
-    if resume.skills:
-        skills_text = "Skills: " + ", ".join(resume.skills)
+    if request.resume.skills:
+        skills_text = "Skills: " + ", ".join(request.resume.skills)
         chunks.append(skills_text)
         chunk_metadata.append({
             "resume_id": resume_id,
             "chunk_type": "skills",
-            "roles": ",".join(preferences.role),
-            "experience_level": preferences.experience_level
+            "roles": ",".join(request.preferences.role),
+            "experience_level": request.preferences.experience_level
         })
         chunk_ids.append(f"{resume_id}_skills")
 
     # each experience as a separate chunk
-    if resume.experience:
-        for i, exp in enumerate(resume.experience):
+    if request.resume.experience:
+        for i, exp in enumerate(request.resume.experience):
             chunks.append(f"Experience: {exp}")
             chunk_metadata.append({
                 "resume_id": resume_id,
                 "chunk_type": "experience",
                 "experience_index": i,
-                "roles": ",".join(preferences.role),
-                "experience_level": preferences.experience_level
+                "roles": ",".join(request.preferences.role),
+                "experience_level": request.preferences.experience_level
             })
             chunk_ids.append(f"{resume_id}_exp_{i}")
             
     # each project as a separate chunk
-    if resume.projects:
-        for i, proj in enumerate(resume.projects):
+    if request.resume.projects:
+        for i, proj in enumerate(request.resume.projects):
             chunks.append(f"Project: {proj}")
             chunk_metadata.append({
                 "resume_id": resume_id,
                 "chunk_type": "project",
                 "project_index": i,
-                "roles": ",".join(preferences.role),
-                "experience_level": preferences.experience_level
+                "roles": ",".join(request.preferences.role),
+                "experience_level": request.preferences.experience_level
             })
             chunk_ids.append(f"{resume_id}_proj_{i}")
     

@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 import chromadb
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 class Settings(BaseSettings):
     openai_api_key: str

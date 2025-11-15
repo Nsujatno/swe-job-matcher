@@ -1,17 +1,17 @@
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent, AgentExecutor
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from langchain.agents import create_agent
 from app.config import settings
 
-# client = OpenAI(api_key=settings.openai_api_key)
-
+# doc strings are required
 @tool
 def get_job_count(input: str) -> str:
+    """Returns the number of available jobs"""
     return "There are 5 software engineering internships available right now."
 
 @tool
 def get_job_info(job_number: str) -> str:
+    """Gets information about a specific job by number (1-5)."""
     jobs = {
         "1": "Google - Software Engineering Intern - Mountain View, CA",
         "2": "Meta - Backend Developer Intern - Menlo Park, CA", 
@@ -24,54 +24,20 @@ def get_job_info(job_number: str) -> str:
         return jobs[job_number]
     else:
         return "Job not found. Please use numbers 1-5."
+
+def create_job_agent():
+    llm = ChatOpenAI(
+        model="gpt-4o-mini", 
+        temperature=0,
+        api_key=settings.openai_api_key
+    )
     
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-    api_key=settings.openai_api_key
-)
-
-# create the agent
-tools = [get_job_count, get_job_info]
-
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful job search assistant. Use your tools to answer questions."),
-    ("placeholder", "{chat_history}"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
-
-agent = create_agent(
-    llm, 
-    tools,
-    state_modifier="You are a helpful job search assistant. Use your tools to answer questions."
-)
-
-# agent executor (handles reAct loop)
-# verbose shows the thinking process
-agent_executor = AgentExecutor(
-    agent=agent, 
-    tools=tools, 
-    verbose=True
-)
-
-# run the agent
-def run_agent(question: str):
-    """Run the agent and show the ReAct pattern"""
-    print(f"\n{'='*60}")
-    print(f"USER QUESTION: {question}")
-    print(f"{'='*60}\n")
+    tools = [get_job_count, get_job_info]
     
-    # Invoke the agent - it will automatically loop until done
-    result = agent_executor.invoke({"input": question})
+    agent = create_agent(
+        llm,
+        tools,
+        system_prompt="You are a helpful job search assistant. Use your tools to answer questions."
+    )
     
-    print(f"\n{'='*60}")
-    print(f"FINAL ANSWER: {result['output']}")
-    print(f"{'='*60}\n")
-
-if __name__ == "__main__":
-    # Example 1: Simple question
-    run_agent("How many jobs are available?")
-    
-    # Example 2: Multiple steps
-    run_agent("Tell me about jobs 1, 2, and 3")
+    return agent

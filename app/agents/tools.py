@@ -1,17 +1,17 @@
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain_core.prompts import PromptTemplate
+from langchain.agents import create_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from app.config import settings
 
+# client = OpenAI(api_key=settings.openai_api_key)
+
 @tool
 def get_job_count(input: str) -> str:
-    """Get the total number of available job listings."""
     return "There are 5 software engineering internships available right now."
 
 @tool
 def get_job_info(job_number: str) -> str:
-    """Get information about a specific job by its number (1-5)."""
     jobs = {
         "1": "Google - Software Engineering Intern - Mountain View, CA",
         "2": "Meta - Backend Developer Intern - Menlo Park, CA", 
@@ -41,13 +41,13 @@ prompt = ChatPromptTemplate.from_messages([
     ("placeholder", "{agent_scratchpad}"),
 ])
 
-agent = create_tool_calling_agent(
+agent = create_agent(
     llm, 
     tools,
-    prompt
+    state_modifier="You are a helpful job search assistant. Use your tools to answer questions."
 )
 
-# agent executor (handles ReAct loop)
+# agent executor (handles reAct loop)
 # verbose shows the thinking process
 agent_executor = AgentExecutor(
     agent=agent, 

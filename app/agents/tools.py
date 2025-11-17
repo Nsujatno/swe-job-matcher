@@ -1,5 +1,6 @@
 import requests
 import asyncio
+import re
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain.agents import create_agent
@@ -9,7 +10,69 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
 
+def _clean_job_description(markdown_text: str) -> str:
+    """
+    Removes common boilerplate and noise from scraped job postings.
+    Keeps only the relevant job content.
+    """
+    
+    # Remove common noise patterns
+    noise_patterns = [
+        r'Skip to main content.*?(?=\n#{1,3})',  # Navigation
+        r'Follow Us.*',  # Footer social links
+        r'© \d{4}.*',  # Copyright
+        r'Sign In.*?(?=\n)',  # Sign in links
+        r'Apply\s*locations.*?(?=\n#{2,3})',  # Apply button section
+        r'Careers Home.*?(?=\n)',  # Career site navigation
+        r'Know Your Rights.*',  # Legal boilerplate
+        r'Read More\s*$',  # Footer links
+    ]
+    
+    cleaned = markdown_text
+    for pattern in noise_patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.MULTILINE | re.DOTALL)
+    
+    # Extract only the key sections
+    sections_to_keep = []
+    lines = cleaned.split('\n')
+    
+    keep_keywords = [
+        'job description', 'your role', 'responsibilities', 'requirements',
+        'qualifications', 'you\'re the right fit', 'skills', 'experience',
+        'about the role', 'what you\'ll do'
+    ]
+    
+    capture = False
+    current_section = []
+    
+    for line in lines:
+        line_lower = line.lower().strip()
+        
+        # Start capturing at relevant headers
+        if any(keyword in line_lower for keyword in keep_keywords):
+            if current_section:
+                sections_to_keep.append('\n'.join(current_section))
+            current_section = [line]
+            capture = True
+        
+        # Stop at footer/legal sections
+        elif any(stop in line_lower for stop in ['equal employment', 'about us', 'follow us', 'workday, inc']):
+            if current_section:
+                sections_to_keep.append('\n'.join(current_section))
+            break
+        
+        # Keep capturing if we're in a relevant section
+        elif capture and line.strip():
+            current_section.append(line)
+    
+    if current_section:
+        sections_to_keep.append('\n'.join(current_section))
+    
+    return '\n\n'.join(sections_to_keep)
+
 async def _crawl_job_async(url: str) -> str:
+    is_workday = "myworkdayjobs.com" in url
+
     browser_config = BrowserConfig(
         headless=True,
         verbose=False,
@@ -26,9 +89,9 @@ async def _crawl_job_async(url: str) -> str:
         cache_mode=CacheMode.BYPASS,
         markdown_generator=md_generator,
         # for workday websites, need delay
-        wait_for="css:[data-automation-id='jobPostingDescription']",
-        delay_before_return_html=2,
-        js_code="window.scrollTo(0, document.body.scrollHeight);",
+        wait_for="css:[data-automation-id='jobPostingDescription']" if is_workday else "css:body",
+        delay_before_return_html=2.0 if is_workday else 0.5,
+        js_code="window.scrollTo(0, document.body.scrollHeight);" if is_workday else None,
     )
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -43,7 +106,11 @@ async def _crawl_job_async(url: str) -> str:
 "as Markdown text. Use this to read job descriptions, requirements, and details.")
 def scrape_job_posting(url: str) -> str:
     # run the async function cleanly
-    return asyncio.run(_crawl_job_async(url))
+    raw_markdown = asyncio.run(_crawl_job_async(url))
+
+    cleaned = _clean_job_description(raw_markdown)
+    
+    return cleaned
 
 @tool(description="Scrapes the first 10 job postings from the Summer2026-Internships GitHub README. Returns a list of dicts: {company, title, link}")
 def get_first_10_github_jobs() -> list:

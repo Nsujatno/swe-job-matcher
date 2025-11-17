@@ -1,13 +1,44 @@
 import requests
-import re
-from rapidfuzz import fuzz
+import asyncio
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain.agents import create_agent
 from bs4 import BeautifulSoup
-from app.config import settings
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, BrowserConfig
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
+
+async def _crawl_job_async(url: str) -> str:
+    browser_config = BrowserConfig(
+        headless=True,
+        verbose=False 
+    )
+    # strips links and images for cleaning
+    md_generator = DefaultMarkdownGenerator(
+        options={
+            "ignore_links": True,
+            "ignore_images": True
+        }
+    )
+    crawl_config = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        markdown_generator=md_generator
+    )
+
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        result = await crawler.arun(url=url, config=crawl_config)
+        
+        if result.success:
+            return result.markdown 
+        else:
+            return f"Error scraping page: {result.error_message}"
+
+@tool(description="Visits a job posting URL, renders the JavaScript, and returns the page content " \
+"as Markdown text. Use this to read job descriptions, requirements, and details.")
+def scrape_job_posting(url: str) -> str:
+    # Run the async function cleanly
+    return asyncio.run(_crawl_job_async(url))
 
 @tool(description="Scrapes the first 10 job postings from the Summer2026-Internships GitHub README. Returns a list of dicts: {company, title, link}")
 def get_first_10_github_jobs() -> list:
@@ -77,40 +108,40 @@ def get_first_10_github_jobs() -> list:
 
 
 # doc strings are required
-@tool
-def get_job_count(input: str) -> str:
-    """Returns the number of available jobs"""
-    return "There are 5 software engineering internships available right now."
+# @tool
+# def get_job_count(input: str) -> str:
+#     """Returns the number of available jobs"""
+#     return "There are 5 software engineering internships available right now."
 
-@tool
-def get_job_info(job_number: str) -> str:
-    """Gets information about a specific job by number (1-5)."""
-    jobs = {
-        "1": "Google - Software Engineering Intern - Mountain View, CA",
-        "2": "Meta - Backend Developer Intern - Menlo Park, CA", 
-        "3": "Amazon - SDE Intern - Seattle, WA",
-        "4": "Microsoft - Software Engineer Intern - Redmond, WA",
-        "5": "Apple - iOS Development Intern - Cupertino, CA"
-    }
+# @tool
+# def get_job_info(job_number: str) -> str:
+#     """Gets information about a specific job by number (1-5)."""
+#     jobs = {
+#         "1": "Google - Software Engineering Intern - Mountain View, CA",
+#         "2": "Meta - Backend Developer Intern - Menlo Park, CA", 
+#         "3": "Amazon - SDE Intern - Seattle, WA",
+#         "4": "Microsoft - Software Engineer Intern - Redmond, WA",
+#         "5": "Apple - iOS Development Intern - Cupertino, CA"
+#     }
     
-    if job_number in jobs:
-        return jobs[job_number]
-    else:
-        return "Job not found. Please use numbers 1-5."
+#     if job_number in jobs:
+#         return jobs[job_number]
+#     else:
+#         return "Job not found. Please use numbers 1-5."
 
 def create_job_agent():
     llm = ChatOpenAI(
         model="gpt-4o-mini", 
-        temperature=0,
-        api_key=settings.openai_api_key
+        temperature=0
     )
     
-    tools = [get_job_count, get_job_info, find_github_job_link]
+    tools = [get_first_10_github_jobs, scrape_job_posting]
     
     agent = create_agent(
         llm,
         tools,
-        system_prompt="You are a helpful job search assistant. Use your tools to answer questions."
+        system_prompt="You are a helpful job search assistant. When a user gives you a job link, use the 'scrape_job_posting' tool to read it before answering questions about requirements."
+        # system_prompt="You are a helpful job search assistant who helps users find their perfect software engineering job. Use your tools to answer questions."
     )
     
     return agent

@@ -42,7 +42,7 @@ async def _crawl_job_async(url: str) -> str:
 @tool(description="Visits a job posting URL, renders the JavaScript, and returns the page content " \
 "as Markdown text. Use this to read job descriptions, requirements, and details.")
 def scrape_job_posting(url: str) -> str:
-    # Run the async function cleanly
+    # run the async function cleanly
     return asyncio.run(_crawl_job_async(url))
 
 @tool(description="Scrapes the first 10 job postings from the Summer2026-Internships GitHub README. Returns a list of dicts: {company, title, link}")
@@ -108,31 +108,7 @@ def get_first_10_github_jobs() -> list:
         if len(jobs) >= 10:
             break
     
-    return jobs       
-
-
-
-# doc strings are required
-# @tool
-# def get_job_count(input: str) -> str:
-#     """Returns the number of available jobs"""
-#     return "There are 5 software engineering internships available right now."
-
-# @tool
-# def get_job_info(job_number: str) -> str:
-#     """Gets information about a specific job by number (1-5)."""
-#     jobs = {
-#         "1": "Google - Software Engineering Intern - Mountain View, CA",
-#         "2": "Meta - Backend Developer Intern - Menlo Park, CA", 
-#         "3": "Amazon - SDE Intern - Seattle, WA",
-#         "4": "Microsoft - Software Engineer Intern - Redmond, WA",
-#         "5": "Apple - iOS Development Intern - Cupertino, CA"
-#     }
-    
-#     if job_number in jobs:
-#         return jobs[job_number]
-#     else:
-#         return "Job not found. Please use numbers 1-5."
+    return jobs
 
 def create_job_agent():
     llm = ChatOpenAI(
@@ -145,8 +121,7 @@ def create_job_agent():
     agent = create_agent(
         llm,
         tools,
-        system_prompt="You are a helpful job search assistant. When a user gives you a job link, use the 'scrape_job_posting' tool to read it before answering questions about requirements."
-        # system_prompt="You are a helpful job search assistant who helps users find their perfect software engineering job. Use your tools to answer questions."
+        system_prompt="You are a helpful job search assistant who helps users find their perfect software engineering job. Use your tools to answer questions."
     )
     
     return agent

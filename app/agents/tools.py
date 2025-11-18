@@ -13,6 +13,69 @@ from app.config import settings, chroma_client
 openai_client = OpenAI(api_key=settings.openai_api_key)
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
 
+@tool(description="Generates a personalized explanation of why a job matches the user's background")
+def explain_job_match(
+    company: str,
+    title: str,
+    job_description: str,
+    matched_sections: list,
+    match_score: float
+) -> str:
+    
+    top_sections = sorted(
+        matched_sections,
+        key=lambda x: x['relevance'],
+        reverse=True
+    )[:3]
+    
+    sections_text = "\n".join([
+        f"- [{section['type']}] (Relevance: {section['relevance']}%): {section['text'][:150]}..."
+        for section in top_sections
+    ])
+    
+    # Determine match quality
+    if match_score >= 70:
+        quality = "excellent"
+    elif match_score >= 50:
+        quality = "good"
+    elif match_score >= 30:
+        quality = "moderate"
+    else:
+        quality = "weak"
+    
+    # Create prompt for LLM
+    prompt = f"""You are a career advisor explaining job match results to a candidate.
+        Job: {title} at {company}
+        Overall Match Score: {match_score}% ({quality} match)
+
+        Job Description (excerpt):
+        {job_description[:600]}...
+
+        Top Matching Resume Sections:
+        {sections_text}
+
+        Task: Write a 2-4 sentence explanation that:
+        1. States whether this is a good fit and why
+        2. Highlights specific overlapping skills or experiences (be specific, mention actual technologies/skills)
+        3. If match is low (<50%), mention what key requirements are missing
+        4. Keep it encouraging but honest
+
+        Write in second person ("You have experience with..."). Be concise and actionable."""
+
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+        response = llm.invoke(prompt)
+        return response.content
+        
+    except Exception as e:
+        # Fallback explanation if LLM fails
+        if match_score >= 70:
+            return f"Strong match ({match_score}%)! Your background aligns well with this role's requirements."
+        elif match_score >= 50:
+            return f"Moderate match ({match_score}%). You have some relevant experience, but may need to highlight transferable skills."
+        else:
+            return f"Limited match ({match_score}%). This role requires specialized skills that don't strongly align with your current background."
+
 @tool(description="Compares a job description against a resume using vector similarity search")
 def match_job_to_resume(job_description: str, resume_id: str) -> dict:
     try:
@@ -142,13 +205,18 @@ def _clean_job_description(markdown_text: str) -> str:
     
     return '\n\n'.join(sections_to_keep)
 
-async def _crawl_job_async(url: str) -> str:
+async def _crawl_job_async(url: str, max_retries: int = 3) -> str:
     is_workday = "myworkdayjobs.com" in url
 
     browser_config = BrowserConfig(
         headless=True,
         verbose=False,
         user_agent_mode="random",
+        extra_args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+        ]
     )
     # strips links and images for cleaning
     md_generator = DefaultMarkdownGenerator(
@@ -157,12 +225,13 @@ async def _crawl_job_async(url: str) -> str:
             "ignore_images": True
         }
     )
+    
     crawl_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         markdown_generator=md_generator,
         # for workday websites, need delay
         wait_for="css:[data-automation-id='jobPostingDescription']" if is_workday else "css:body",
-        delay_before_return_html=2.0 if is_workday else 0.5,
+        delay_before_return_html=5.0 if is_workday else 0.5,
         js_code="window.scrollTo(0, document.body.scrollHeight);" if is_workday else None,
     )
 
@@ -184,8 +253,8 @@ def scrape_job_posting(url: str) -> str:
     
     return cleaned
 
-@tool(description="Scrapes the first 10 job postings from the Summer2026-Internships GitHub README. Returns a list of dicts: {company, title, link}")
-def get_first_10_github_jobs() -> list:
+@tool(description="Scrapes the first 3 job postings from the Summer2026-Internships GitHub README. Returns a list of dicts: {company, title, link}")
+def get_first_3_github_jobs() -> list:
     try:
         response = requests.get(GITHUB_RAW_URL, timeout=30)
         response.raise_for_status()
@@ -209,7 +278,7 @@ def get_first_10_github_jobs() -> list:
     
     rows = tbody.find_all('tr')
     
-    for row in rows[:10]:
+    for row in rows[:3]:
         cells = row.find_all('td')
         
         if len(cells) < 4:
@@ -255,12 +324,29 @@ def create_job_agent():
         temperature=0
     )
     
-    tools = [get_first_10_github_jobs, scrape_job_posting]
+    tools = [get_first_3_github_jobs, scrape_job_posting, match_job_to_resume, explain_job_match]
     
     agent = create_agent(
         llm,
         tools,
-        system_prompt="You are a helpful job search assistant who helps users find their perfect software engineering job. Use your tools to answer questions."
+        system_prompt = """You are an intelligent job recommendation assistant.
+            Your workflow:
+            1. Get jobs using get_first_3_github_jobs() - Unless the user specifically types in a url link, use that one instead and do not call get_first_3_github_jobs() just scrape the details of the job link and explain using explain_job_match()
+            2. For each job:
+            a. Scrape details from the link in each job with scrape_job_posting()
+            b. Calculate match with match_job_to_resume()
+            3. Sort by match_score
+            4. For top 3 jobs (score > 50):
+            - Use explain_job_match() to generate personalized explanations
+            5. Present recommendations with:
+            - Company and title
+            - Match score
+            - Detailed explanation
+            - Application link
+
+            Show your reasoning as you work through the jobs.
+            IMPORTANT: If a tool returns an error, acknowledge it briefly and move on to the next job. 
+            Don't let one failed job stop the entire analysis."""
     )
     
     return agent

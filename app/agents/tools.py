@@ -5,7 +5,7 @@ from typing import List, Dict
 
 GITHUB_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
 
-# @tool(description="This tool gets a certain amount of jobs from the github summer 2026 internships repo")
+@tool(description="This tool gets a certain amount of jobs from the github summer 2026 internships repo")
 def get_github_jobs(limit: int=3) -> List[Dict]:
     try:
         r = requests.get(GITHUB_URL, timeout=10)
@@ -23,12 +23,16 @@ def get_github_jobs(limit: int=3) -> List[Dict]:
         rows = body.find_all("tr")
         
         jobs = []
+        last_company = ""
 
         # for each table row, we need to extract the data from each column, td
         for row in rows:
             if len(jobs) >= limit:
                 break
             cells = row.find_all("td")
+            # check if any rows are bad
+            if len(cells) < 4:
+                continue
             
             raw_company = cells[0].get_text(strip=True)
             
@@ -64,11 +68,11 @@ def get_github_jobs(limit: int=3) -> List[Dict]:
                 })
         return jobs
     except Exception as e:
-        return {"Error": f"Failed to fetch jobs: {str(e)}"}
+        return [{"Error": f"Failed to fetch jobs: {str(e)}"}]
 
 
-test = get_github_jobs()
-print(test)
+# test = get_github_jobs()
+# print(test)
 
 
 

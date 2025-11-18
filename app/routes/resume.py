@@ -1,5 +1,4 @@
 import uuid
-
 from fastapi import APIRouter, HTTPException, status
 from openai import OpenAI
 from app.config import settings, chroma_client

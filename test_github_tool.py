@@ -1,11 +1,14 @@
-from app.agents.tools import get_first_10_github_jobs, scrape_job_posting, match_job_to_resume
-# jobs = get_first_10_github_jobs.invoke({})
+from app.agents.tools import get_first_3_github_jobs, scrape_job_posting, match_job_to_resume, explain_job_match
+# jobs = get_first_3_github_jobs.invoke({})
 # print(jobs)
 
 job1 = "https://jobs.ea.com/en_US/careers/JobDetail/Systems-Software-Engineer-Co-op/210903?utm_source=Simplify&ref=Simplify"
 job2 = "https://philips.wd3.myworkdayjobs.com/jobs-and-careers/job/Bothell/Intern---Ultrasound-Imaging-Acoustics---Bothell--WA---Summer-2026_567433?utm_source=Simplify&ref=Simplify"
+job3 = "https://smithnephew.wd5.myworkdayjobs.com/en-US/External/job/Pittsburgh-PA/Intern-Robotics-Software--Pittsburgh--PA-_R86302?utm_source=Simplify&ref=Simplify"
+job4 = "https://alsacstjude.wd1.myworkdayjobs.com/careersalsacstjude/job/Memphis-TN/Summer-2026-Intern---AI-Software-Engineer--Memphis--TN-_R0010291?utm_source=Simplify&ref=Simplify"
 
 resume_id = "4afe7d9b-1d99-426f-becd-ac94775182ec"
+resume_id_2 = "79e8ee7d-bcfe-4ce7-9526-d62de005b66e"
 
 job_description_1_workday = """
 ### Job Description
@@ -67,8 +70,35 @@ Company relocation benefits _**will not**_ be provided for this position. For th
 This requisition is expected to stay active for 45 days but may close earlier if a successful candidate is selected or business necessity dictates. Interested candidates are encouraged to apply as soon as possible to ensure consideration.
 """
 
-# job = scrape_job_posting.invoke(job2)
+# result = diagnose_workday_site(job3)
+# print(result)
+
+job = scrape_job_posting.invoke(job4)
+print(job)
+
+# job = match_job_to_resume(job_description_1_workday, resume_id_2)
 # print(job)
 
-# job = match_job_to_resume(job_description_1_workday, resume_id)
-# print(job)
+# explanation = explain_job_match.invoke({
+#     "company": "Philips",
+#     "title": "Ultrasound Imaging Acoustics Intern",
+#     "job_description": """
+#     Intern working on GPU-based signal processing for ultrasound imaging.
+#     Requires: GPU/CUDA, Python/Matlab, signal processing, AI/ML experience.
+#     """,
+#     "matched_sections": [
+#         {
+#             "text": "Experience: Software Engineer Intern at TechCorp - REST APIs with FastAPI",
+#             "type": "experience",
+#             "relevance": 33.4
+#         },
+#         {
+#             "text": "Skills: Python, FastAPI, PostgreSQL, REST APIs, Docker",
+#             "type": "skills",
+#             "relevance": 21.1
+#         }
+#     ],
+#     "match_score": 30.9
+# })
+
+# print(explanation)
